@@ -112,14 +112,50 @@
     #scan-frame:not(.hidden)::after {
       animation: pulse 1.8s ease-in-out infinite;
     }
+
+    /* Start splash overlay */
+    #start-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      padding: 32px;
+    }
+
+    #start-overlay p {
+      color: #aaa;
+      font-size: 0.9rem;
+      text-align: center;
+      max-width: 280px;
+      line-height: 1.5;
+    }
+
+    #btn-start {
+      padding: 18px 48px;
+      background: linear-gradient(135deg, #a78bfa, #60a5fa);
+      color: #fff;
+      font-size: 1.1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 14px;
+      cursor: pointer;
+      letter-spacing: 0.3px;
+    }
+
+    #start-overlay.hidden { display: none; }
   </style>
 </head>
 <body>
 
   <a-scene
-    mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;"
+    mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind; autoStart: false"
     color-space="sRGB"
-    renderer="colorManagement: true; physicallyCorrectLights: true;"
+    renderer="colorManagement: true, physicallyCorrectLights: true"
     vr-mode-ui="enabled: false"
     device-orientation-permission-ui="enabled: false"
   >
@@ -143,6 +179,12 @@
     </a-entity>
   </a-scene>
 
+  <!-- Start splash: shown until user taps, provides the user gesture iOS needs -->
+  <div id="start-overlay">
+    <button id="btn-start">Start AR Camera</button>
+    <p>Tap above to open the camera, then point it at the marker card</p>
+  </div>
+
   <div id="ui-overlay">
     <a href="index.html" id="btn-back">&#8592; Back</a>
     <button id="btn-unmute">&#128263; Tap to unmute</button>
@@ -156,10 +198,12 @@
   </div>
 
   <script>
-    const vid       = document.getElementById('vid');
-    const hint      = document.getElementById('scan-hint');
-    const frame     = document.getElementById('scan-frame');
-    const btnUnmute = document.getElementById('btn-unmute');
+    const vid           = document.getElementById('vid');
+    const hint          = document.getElementById('scan-hint');
+    const frame         = document.getElementById('scan-frame');
+    const btnUnmute     = document.getElementById('btn-unmute');
+    const startOverlay  = document.getElementById('start-overlay');
+    const btnStart      = document.getElementById('btn-start');
     let muted = true;
 
     btnUnmute.addEventListener('click', () => {
@@ -168,10 +212,26 @@
       btnUnmute.textContent = muted ? '🔇 Tap to unmute' : '🔊 Muted';
     });
 
-    // Unlock autoplay on iOS with first user touch
-    document.addEventListener('touchstart', () => vid.play().catch(() => {}), { once: true });
-
     const scene = document.querySelector('a-scene');
+
+    btnStart.addEventListener('click', () => {
+      btnStart.textContent = 'Starting…';
+      btnStart.disabled = true;
+
+      // Wait for scene to finish loading, then start MindAR (camera prompt fires here)
+      const doStart = () => {
+        const arSystem = scene.systems['mindar-image-system'];
+        arSystem.start();
+        startOverlay.classList.add('hidden');
+      };
+
+      if (scene.hasLoaded) {
+        doStart();
+      } else {
+        scene.addEventListener('loaded', doStart, { once: true });
+      }
+    });
+
     scene.addEventListener('loaded', () => {
       const target = document.querySelector('[mindar-image-target]');
 
