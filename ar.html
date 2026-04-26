@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MarkerVideo AR</title>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    /* A-Frame fills the whole screen */
+    a-scene { width: 100vw; height: 100vh; }
+
+    /* UI floats above the canvas */
+    #ui-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 100;
+    }
+
+    #btn-back {
+      position: absolute;
+      top: 16px; left: 16px;
+      pointer-events: all;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 0.85rem;
+      padding: 9px 14px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    #btn-unmute {
+      position: absolute;
+      top: 16px; right: 16px;
+      pointer-events: all;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 0.85rem;
+      padding: 9px 14px;
+      cursor: pointer;
+    }
+
+    #scan-hint {
+      position: absolute;
+      bottom: 48px;
+      left: 50%;
+      transform: translateX(-50%);
+      white-space: nowrap;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 0.9rem;
+      padding: 12px 22px;
+      transition: opacity 0.4s;
+    }
+
+    #scan-hint.hidden { opacity: 0; }
+
+    /* Corner bracket scanning frame */
+    #scan-frame {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: min(72vw, 300px);
+      aspect-ratio: 1.586;
+      transition: opacity 0.4s;
+    }
+
+    #scan-frame.hidden { opacity: 0; }
+
+    #scan-frame::before, #scan-frame::after,
+    #scan-frame .c1, #scan-frame .c2 {
+      content: '';
+      position: absolute;
+      width: 26px; height: 26px;
+      border-color: rgba(167,139,250,0.9);
+      border-style: solid;
+    }
+
+    #scan-frame::before { top:0; left:0;  border-width: 3px 0 0 3px; border-radius: 4px 0 0 0; }
+    #scan-frame::after  { top:0; right:0; border-width: 3px 3px 0 0; border-radius: 0 4px 0 0; }
+    #scan-frame .c1     { bottom:0; right:0; border-width: 0 3px 3px 0; border-radius: 0 0 4px 0; }
+    #scan-frame .c2     { bottom:0; left:0;  border-width: 0 0 3px 3px; border-radius: 0 0 0 4px; }
+
+    @keyframes pulse {
+      0%,100% { opacity: 0.5; }
+      50%      { opacity: 1; }
+    }
+
+    #scan-frame:not(.hidden) > *,
+    #scan-frame:not(.hidden)::before,
+    #scan-frame:not(.hidden)::after {
+      animation: pulse 1.8s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body>
+
+  <a-scene
+    mindar-image="imageTargetSrc: https://cdn.jsdelivr.net/gh/hiukim/mind-ar-js@1.2.5/examples/image-tracking/assets/card-example/card.mind;"
+    color-space="sRGB"
+    renderer="colorManagement: true; physicallyCorrectLights: true;"
+    vr-mode-ui="enabled: false"
+    device-orientation-permission-ui="enabled: false"
+  >
+    <a-assets>
+      <video
+        id="vid"
+        src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+        preload="auto"
+        loop="true"
+        muted="true"
+        playsinline
+        crossorigin="anonymous"
+      ></video>
+    </a-assets>
+
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+    <a-entity mindar-image-target="targetIndex: 0">
+      <!-- width=1, height=0.630 matches the card's 1.586:1 aspect ratio -->
+      <a-video src="#vid" width="1" height="0.630" position="0 0 0"></a-video>
+    </a-entity>
+  </a-scene>
+
+  <div id="ui-overlay">
+    <a href="index.html" id="btn-back">&#8592; Back</a>
+    <button id="btn-unmute">&#128263; Tap to unmute</button>
+
+    <div id="scan-frame">
+      <div class="c1"></div>
+      <div class="c2"></div>
+    </div>
+
+    <div id="scan-hint">Point camera at the marker card</div>
+  </div>
+
+  <script>
+    const vid       = document.getElementById('vid');
+    const hint      = document.getElementById('scan-hint');
+    const frame     = document.getElementById('scan-frame');
+    const btnUnmute = document.getElementById('btn-unmute');
+    let muted = true;
+
+    btnUnmute.addEventListener('click', () => {
+      muted = !muted;
+      vid.muted = muted;
+      btnUnmute.textContent = muted ? '🔇 Tap to unmute' : '🔊 Muted';
+    });
+
+    // Unlock autoplay on iOS with first user touch
+    document.addEventListener('touchstart', () => vid.play().catch(() => {}), { once: true });
+
+    const scene = document.querySelector('a-scene');
+    scene.addEventListener('loaded', () => {
+      const target = document.querySelector('[mindar-image-target]');
+
+      target.addEventListener('targetFound', () => {
+        vid.play().catch(() => {});
+        hint.classList.add('hidden');
+        frame.classList.add('hidden');
+      });
+
+      target.addEventListener('targetLost', () => {
+        vid.pause();
+        hint.textContent = 'Keep the marker in view';
+        hint.classList.remove('hidden');
+        frame.classList.remove('hidden');
+      });
+    });
+  </script>
+</body>
+</html>
